@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
-from sklearn.cluster import KMeans
-import torch
+import argparse
 from ultralytics import YOLO
 
 # load pretrained detector
@@ -14,7 +13,7 @@ def classify_team_color(crop):
         return (0, 255, 0), "Unknown"  # Return green for empty crops
 
     # crop upper 50% (Torso)
-    h, w = crop.shape
+    h, w = crop.shape[:2]
     torso = crop[0 : int(h * 0.5), :]
 
     # Convert to BGR to HSV & mask out green grass
@@ -35,7 +34,7 @@ def classify_team_color(crop):
     mean_color = np.mean(foreground_pixels, axis=0) # [B, G, R]
 
     # Simple heuristic split: Red dominance vs Blue dominance
-    b,g,r = mean_color, mean_color[18], mean_color[2]
+    b, g, r = mean_color
     if r > g and r > b:
         return (0, 0, 255), "Red Team"
     elif b > g and b > r:
@@ -45,8 +44,15 @@ def classify_team_color(crop):
 
 
 
-# process video stream (Replace "sample.mp4" with 0 for Webcam or IP camera url)
-video_source = "https://media.geeksforgeeks.org/wp-content/uploads/20250910161721597148/sample.mp4"
+# process video stream
+parser = argparse.ArgumentParser(description="Classify teams from a live camera stream")
+parser.add_argument(
+    "--source",
+    default="0",
+    help="Camera index or IP camera stream URL (for example: http://192.168.1.10:8080/video)",
+)
+args = parser.parse_args()
+video_source = int(args.source) if args.source.isdigit() else args.source
 cap = cv2.VideoCapture(video_source)
 
 
@@ -54,7 +60,7 @@ frame_idx = 0
 
 print("\n---Running Live Player Detection and Team Classification---")
 
-while cap.isOpened() and frame_idx < 60:
+while cap.isOpened():
     ret, frame = cap.read()
 
     if not ret:
@@ -65,24 +71,25 @@ while cap.isOpened() and frame_idx < 60:
     results = model.predict(frame, conf=0.5, verbose=False)
 
 
-    for box in results.boxes:
-        x1, y1, x2, y2 = map(int, box.xyxy[0])
-        crop = frame[y1:y2, x1:x2]
+    for result in results:
+        for box in result.boxes:
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            crop = frame[y1:y2, x1:x2]
 
-        # classify team color
-        team_color, team_name = classify_team_color(crop)
+            # classify team color
+            team_color, team_name = classify_team_color(crop)
 
-        # draw bounding box and label
-        cv2.rectangle(frame, (x1, y1), (x2, y2), team_color, 2)
-        cv2.putText(
-            frame,
-            team_name,
-            (x1, y1 - 10),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            team_color,
-            2,
-        )
+            # draw bounding box and label
+            cv2.rectangle(frame, (x1, y1), (x2, y2), team_color, 2)
+            cv2.putText(
+                frame,
+                team_name,
+                (x1, y1 - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                team_color,
+                2,
+            )
     frame_idx += 1
 
 
