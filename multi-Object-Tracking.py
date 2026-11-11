@@ -4,14 +4,6 @@ import torch
 from ultralytics import YOLO
 import urllib.request
 import os
-import argparse
-
-
-# command-line options: run the full video by default, optionally without the preview window
-parser = argparse.ArgumentParser()
-parser.add_argument("--max-frames", type=int, default=0, help="stop after this many frames (0 = whole video)")
-parser.add_argument("--no-show", action="store_true", help="don't open the live preview window")
-args = parser.parse_args()
 
 
 # verify GPU availability
@@ -49,7 +41,7 @@ print("\n--- Running ByteTrack Tracking Loop ---")
 frame_count = 0
 
 # Run tracking generator across video frames
-results = model.track(source=video_path, show=not args.no_show, stream=True, tracker="bytetrack.yaml", conf=0.25)
+results = model.track(source=video_path, show=True, stream=True, tracker="bytetrack.yaml", conf=0.25)
 
 
 
@@ -110,9 +102,8 @@ for result in results:
     )
     out.write(frame)
     frame_count += 1
-    if frame_count % 100 == 0:
-        print(f"Frame {frame_count}: {len(unique_track_ids)} unique IDs so far", flush=True)
-    if args.max_frames and frame_count >= args.max_frames:
+    if frame_count >= 100:
+        # Process first 100 frames for quick validation
         break
 
 cap.release()
@@ -120,3 +111,5 @@ out.release()
 print(f"\nTracking Complete! Processed {frame_count} frames.")
 print(f"Total Unique Object IDs Tracked: {len(unique_track_ids)}")
 print(f"Annotated tracking video saved to '{out_path}'.")
+
+# if possible, let this stuff keep on running in the background for a while to see how many unique IDs it can track over time
